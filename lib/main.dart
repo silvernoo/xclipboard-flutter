@@ -1,16 +1,19 @@
+import 'dart:async';
+
+import 'package:clipboard/clipboard.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:web_socket_channel/io.dart';
-import 'package:xclipboard/dialog/add_address_dialog.dart';
-import 'package:xclipboard/util/store.dart';
+import 'package:xclipboard/util/target.dart';
+import 'package:xclipboard/util/websocket.dart';
 
 void main() => runApp(MyApp());
+
+class ConstValue {}
 
 class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'XClipboard',
+      title: 'xClipboard',
       theme: ThemeData(
         primarySwatch: Colors.lightBlue,
         textTheme: Theme.of(context).textTheme.apply(
@@ -18,7 +21,7 @@ class MyApp extends StatelessWidget {
               displayColor: Colors.white,
             ),
       ),
-      home: MyHomePage(title: 'XClipboard'),
+      home: MyHomePage(title: 'xClipboard'),
     );
   }
 }
@@ -32,74 +35,70 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  IOWebSocketChannel ioWebSocketChannel;
-
-  String _text;
-
-  IconData _icon = Icons.add;
+  var lastText;
+  List record = [];
 
   @override
   void initState() {
-    dataManager.serverInfoController.stream.listen((data) {
-      var uri = Uri(
-        scheme: "ws",
-        host: data.address.split(":")[0],
-        port: int.parse(data.address.split(":")[1]),
-        queryParameters: {"user": data.user},
-      );
-      print(uri.toString());
-      ioWebSocketChannel = IOWebSocketChannel.connect(uri.toString());
-      ioWebSocketChannel.stream.listen((data) {
-        setState(() {
-          _text = data;
-        });
-      });
-      setState(() {
-        _icon = Icons.delete_outline;
+    super.initState();
+    var webSocket = WebSocket(Target("ws://172.24.3.227:9000", "default", "&*……UJM·12"));
+    Timer(Duration(seconds: 1), () {
+      FlutterClipboard.paste().then((value) {
+        if (lastText != value) {
+          webSocket.send(lastText);
+          setState(() {
+            record.add(value);
+          });
+        }
       });
     });
-    super.initState();
+    webSocket.handle((event) {
+      if (lastText != event) {
+        print(event);
+        FlutterClipboard.copy(event).then((value) => print('copied'));
+        lastText = event;
+        setState(() {
+          record.add(event);
+        });
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.title),
+        title: Text(
+          widget.title,
+          style: TextStyle(color: Colors.white),
+        ),
       ),
       body: Container(
         width: double.infinity,
-        color: Colors.red,
-        child: Column(
-          children: <Widget>[
-            Text("$_text"),
-            FlatButton(
-              onPressed: () {
-                _send();
-              },
-              child: Text("SEND"),
-            )
-          ],
+        color: Colors.black87,
+        child: ListView.builder(
+          itemCount: record.length,
+          itemBuilder: (context, index) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('${record[index]}'),
+                Divider(
+                  height: 1,
+                  color: Colors.white,
+                ),
+              ],
+            );
+          },
         ),
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: _addServerAddress,
         tooltip: 'Add Server address',
-        child: Icon(_icon),
+        onPressed: _showServerDetails,
+        child: Icon(Icons.add),
       ), // This trailing comma makes auto-formatting nicer for build methods.
     );
   }
 
-  _addServerAddress() {
-    showDialog<String>(
-        context: context,
-        builder: (BuildContext buildContext) {
-          return SystemPadding();
-        });
-  }
-
-  void _send() async {
-    var data = await Clipboard.getData('text/plain');
-    ioWebSocketChannel.sink.add(data.text);
-  }
+  void _showServerDetails() {}
 }
