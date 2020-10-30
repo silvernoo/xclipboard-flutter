@@ -53,7 +53,7 @@ class _MyHomePageState extends State<MyHomePage> {
       });
     });
     webSocket.handle((event) {
-      if (lastText != event) {
+      if (lastText != event && event != null && event != "") {
         print(event);
         FlutterClipboard.copy(event).then((value) => print('copied'));
         lastText = event;
